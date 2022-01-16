@@ -9,7 +9,6 @@
 ```golang
 import (
 	"log"
-	"net/http"
 
 	"github.com/hupe1980/socks"
 )
@@ -20,7 +19,7 @@ func main() {
 ```
 
 ### Documentation
-See [godoc](https://pkg.go.dev/github.com/hupe1980/mitmproxy).
+See [godoc](https://pkg.go.dev/github.com/hupe1980/socks).
 
 ### Examples
 See more complete [examples](https://github.com/hupe1980/socks/tree/main/_examples).
