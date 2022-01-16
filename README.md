@@ -3,6 +3,8 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/hupe1980/socks.svg)](https://pkg.go.dev/github.com/hupe1980/socks)
 > Golang socks proxy and dialer
 
+:warning: This is experimental and subject to breaking changes.
+
 ## Usage
 ```golang
 import (
