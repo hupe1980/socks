@@ -81,8 +81,6 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	return conn, nil
 }
 
-type AuthenticateFunc func(context.Context, *Conn, AuthMethod) error
-
 type Socks5DialerOptions struct {
 	// Logger specifies an optional logger.
 	// If nil, logging is done via the log package's standard logger.

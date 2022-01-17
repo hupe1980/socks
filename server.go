@@ -19,13 +19,19 @@ type Options struct {
 	// methods.
 	// If empty, SOCKS server supports AuthMethodNotRequired.
 	AuthMethods []AuthMethod
+
+	// Authenticate specifies the optional authentication
+	// function. It must be non-nil when AuthMethods is not empty.
+	// It must return an error when the authentication is failed.
+	Authenticate AuthenticateFunc
 }
 
 type Server struct {
 	*logger
-	addr        string
-	dialer      Dialer
-	authMethods []AuthMethod
+	addr         string
+	dialer       Dialer
+	authMethods  []AuthMethod
+	authenticate AuthenticateFunc
 }
 
 func New(addr string, optFns ...func(*Options)) *Server {
@@ -40,10 +46,11 @@ func New(addr string, optFns ...func(*Options)) *Server {
 	}
 
 	return &Server{
-		logger:      &logger{options.Logger},
-		addr:        addr,
-		dialer:      options.Dialer,
-		authMethods: options.AuthMethods,
+		logger:       &logger{options.Logger},
+		addr:         addr,
+		dialer:       options.Dialer,
+		authMethods:  options.AuthMethods,
+		authenticate: options.Authenticate,
 	}
 }
 
@@ -104,10 +111,11 @@ func (s *Server) handleConnection(conn net.Conn) error {
 		return socks4Handler.handle()
 	case Socks5Version:
 		socks5Handler := &socks5Handler{
-			logger:      s.logger,
-			dialer:      s.dialer,
-			conn:        socksConn,
-			authMethods: s.authMethods,
+			logger:       s.logger,
+			dialer:       s.dialer,
+			conn:         socksConn,
+			authMethods:  s.authMethods,
+			authenticate: s.authenticate,
 		}
 
 		return socks5Handler.handle()

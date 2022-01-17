@@ -63,9 +63,10 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 
 type socks5Handler struct {
 	*logger
-	conn        *Conn
-	dialer      Dialer
-	authMethods []AuthMethod
+	conn         *Conn
+	dialer       Dialer
+	authMethods  []AuthMethod
+	authenticate AuthenticateFunc
 }
 
 func (h *socks5Handler) handle() error {
@@ -74,17 +75,23 @@ func (h *socks5Handler) handle() error {
 		return err
 	}
 
-	am := h.selectAuthMethod(methodSelectReq.Methods)
+	method := h.selectAuthMethod(methodSelectReq.Methods)
 
 	if err := h.conn.Write(&MethodSelectResponse{
 		Version: Socks5Version,
-		Method:  am,
+		Method:  method,
 	}); err != nil {
 		return err
 	}
 
-	if am == AuthMethodNoAcceptableMethods {
+	if method == AuthMethodNoAcceptableMethods {
 		return errors.New("no supported authentication mechanism")
+	}
+
+	if h.authenticate != nil {
+		if err := h.authenticate(context.Background(), h.conn, method); err != nil {
+			return err
+		}
 	}
 
 	req := &Socks5Request{}

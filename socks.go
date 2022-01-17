@@ -2,6 +2,7 @@ package socks
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -89,6 +90,8 @@ const (
 	AuthStatusSuccess AuthStatus = 0x00
 	AuthStatusFailure AuthStatus = 0xff
 )
+
+type AuthenticateFunc func(context.Context, *Conn, AuthMethod) error
 
 type Socks4Request struct {
 	Version Version
