@@ -25,6 +25,19 @@ const (
 	AssociateCommand Command = 0x03
 )
 
+func (cmd Command) String() string {
+	switch cmd {
+	case ConnectCommand:
+		return "socks connect"
+	case BindCommand:
+		return "socks bind"
+	case AssociateCommand:
+		return "socks associate"
+	default:
+		return "socks " + strconv.Itoa(int(cmd))
+	}
+}
+
 type Socks4Status uint8
 
 const (

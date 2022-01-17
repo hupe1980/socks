@@ -39,7 +39,7 @@ func (c *socksConn) write(resp encoding.BinaryMarshaler) error {
 	return nil
 }
 
-func (c *socksConn) proxy(target net.Conn) error {
+func (c *socksConn) connect(target net.Conn) error {
 	errCh := make(chan error, 2)
 
 	go proxy(target, c.reader, errCh)

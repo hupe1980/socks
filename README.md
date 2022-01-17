@@ -22,7 +22,7 @@ func main() {
 See [godoc](https://pkg.go.dev/github.com/hupe1980/socks).
 
 ### Examples
-See more complete [examples](https://github.com/hupe1980/socks/tree/main/_examples).
+See more complete [examples](https://github.com/hupe1980/socks/tree/main/examples).
 
 ## License
 [MIT](LICENCE)

@@ -53,7 +53,7 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 		return err
 	}
 
-	return h.proxy(target)
+	return h.connect(target)
 }
 
 type socks5Handler struct {
@@ -121,5 +121,5 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 		return err
 	}
 
-	return h.proxy(target)
+	return h.connect(target)
 }
