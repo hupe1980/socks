@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -60,12 +59,9 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 		return nil, err
 	}
 
-	socksConn := &socksConn{
-		reader: bufio.NewReader(conn),
-		writer: conn,
-	}
+	socksConn := NewConn(conn)
 
-	if err := socksConn.write(&Socks4Request{
+	if err := socksConn.Write(&Socks4Request{
 		Version: Socks4Version,
 		CMD:     ConnectCommand,
 		Addr:    addr,
@@ -74,7 +70,7 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	resp := &Socks4Response{}
-	if err := socksConn.read(resp); err != nil {
+	if err := socksConn.Read(resp); err != nil {
 		return nil, err
 	}
 
@@ -85,7 +81,7 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	return conn, nil
 }
 
-type AuthenticateFunc func(context.Context, *socksConn, AuthMethod) error
+type AuthenticateFunc func(context.Context, *Conn, AuthMethod) error
 
 type Socks5DialerOptions struct {
 	// Logger specifies an optional logger.
@@ -151,12 +147,9 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 		return nil, err
 	}
 
-	socksConn := &socksConn{
-		reader: bufio.NewReader(conn),
-		writer: conn,
-	}
+	socksConn := NewConn(conn)
 
-	if err := socksConn.write(&MethodSelectRequest{
+	if err := socksConn.Write(&MethodSelectRequest{
 		Version: Socks5Version,
 		Methods: d.authMethods,
 	}); err != nil {
@@ -164,7 +157,7 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	methodSelectResp := &MethodSelectResponse{}
-	if err := socksConn.read(methodSelectResp); err != nil {
+	if err := socksConn.Read(methodSelectResp); err != nil {
 		return nil, err
 	}
 
@@ -178,7 +171,7 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 		}
 	}
 
-	if err := socksConn.write(&Socks5Request{
+	if err := socksConn.Write(&Socks5Request{
 		Version: Socks5Version,
 		CMD:     ConnectCommand,
 		Addr:    addr,
@@ -187,7 +180,7 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	resp := &Socks5Response{}
-	if err := socksConn.read(resp); err != nil {
+	if err := socksConn.Read(resp); err != nil {
 		return nil, err
 	}
 

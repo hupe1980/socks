@@ -1,16 +1,20 @@
 package socks
 
-import "context"
+import (
+	"context"
+	"errors"
+	"strings"
+)
 
 type socks4Handler struct {
 	*logger
-	*socksConn
+	conn   *Conn
 	dialer Dialer
 }
 
 func (h *socks4Handler) handle() error {
 	req := &Socks4Request{}
-	if err := h.read(req); err != nil {
+	if err := h.conn.Read(req); err != nil {
 		return err
 	}
 
@@ -20,7 +24,7 @@ func (h *socks4Handler) handle() error {
 	case BindCommand, AssociateCommand:
 		fallthrough
 	default:
-		if err := h.write(&Socks4Response{
+		if err := h.conn.Write(&Socks4Response{
 			Status: Socks4StatusRejected,
 		}); err != nil {
 			return err
@@ -33,50 +37,58 @@ func (h *socks4Handler) handle() error {
 func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 	target, err := h.dialer.DialContext(context.Background(), "tcp", req.Addr)
 	if err != nil {
-		if err := h.write(&Socks4Response{
+		writeErr := h.conn.Write(&Socks4Response{
 			Status: Socks4StatusRejected,
-		}); err != nil {
-			return err
+		})
+		if writeErr != nil {
+			return writeErr
 		}
 
-		return nil
+		return err
 	}
 
 	defer func() {
 		_ = target.Close()
 	}()
 
-	if err := h.write(&Socks4Response{
+	if err := h.conn.Write(&Socks4Response{
 		Status: Socks4StatusGranted,
 		Addr:   req.Addr,
 	}); err != nil {
 		return err
 	}
 
-	return h.connect(target)
+	return h.conn.Connect(target)
 }
 
 type socks5Handler struct {
 	*logger
-	*socksConn
-	dialer Dialer
+	conn        *Conn
+	dialer      Dialer
+	authMethods []AuthMethod
 }
 
 func (h *socks5Handler) handle() error {
 	methodSelectReq := &MethodSelectRequest{}
-	if err := h.read(methodSelectReq); err != nil {
+	if err := h.conn.Read(methodSelectReq); err != nil {
 		return err
 	}
 
-	if err := h.write(&MethodSelectResponse{
+	am := h.selectAuthMethod(methodSelectReq.Methods)
+
+	if err := h.conn.Write(&MethodSelectResponse{
 		Version: Socks5Version,
-		Method:  AuthMethodNotRequired,
+		Method:  am,
 	}); err != nil {
 		return err
 	}
 
+	if am == AuthMethodNoAcceptableMethods {
+		return errors.New("no supported authentication mechanism")
+	}
+
 	req := &Socks5Request{}
-	if err := h.read(req); err != nil {
+	if err := h.conn.Read(req); err != nil {
 		return err
 	}
 
@@ -86,7 +98,7 @@ func (h *socks5Handler) handle() error {
 	case BindCommand, AssociateCommand:
 		fallthrough
 	default:
-		if err := h.write(&Socks5Response{
+		if err := h.conn.Write(&Socks5Response{
 			Version: Socks5Version,
 			Status:  Socks5StatusCMDNotSupported,
 		}); err != nil {
@@ -97,29 +109,53 @@ func (h *socks5Handler) handle() error {
 	return nil
 }
 
+func (h *socks5Handler) selectAuthMethod(authMethods []AuthMethod) AuthMethod {
+	for _, dm := range authMethods {
+		for _, sm := range h.authMethods {
+			if dm == sm {
+				return dm
+			}
+		}
+	}
+
+	return AuthMethodNoAcceptableMethods
+}
+
 func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 	target, err := h.dialer.DialContext(context.Background(), "tcp", req.Addr)
 	if err != nil {
-		if err := h.write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusHostUnreachable, //?
-		}); err != nil {
-			return err
+		msg := err.Error()
+		status := Socks5StatusHostUnreachable
+
+		if strings.Contains(msg, "refused") {
+			status = Socks5StatusConnectionRefused
+		} else if strings.Contains(msg, "network is unreachable") {
+			status = Socks5StatusNetworkUnreaachable
 		}
 
-		return nil
+		writeErr := h.conn.Write(&Socks5Response{
+			Version: Socks5Version,
+			Status:  status,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		h.logErrorf("Connect to %v failed: %v", req.Addr, err)
+
+		return err
 	}
 
 	defer func() {
 		_ = target.Close()
 	}()
 
-	if err := h.write(&Socks5Response{
+	if err := h.conn.Write(&Socks5Response{
 		Version: Socks5Version,
 		Status:  Socks5StatusGranted,
 	}); err != nil {
 		return err
 	}
 
-	return h.connect(target)
+	return h.conn.Connect(target)
 }

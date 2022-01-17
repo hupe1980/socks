@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"bufio"
 	"errors"
 	"log"
 	"net"
@@ -15,18 +14,25 @@ type Options struct {
 	Logger golog.Logger
 
 	Dialer Dialer
+
+	// AuthMethods specifies the list of supported authentication
+	// methods.
+	// If empty, SOCKS server supports AuthMethodNotRequired.
+	AuthMethods []AuthMethod
 }
 
 type Server struct {
 	*logger
-	addr   string
-	dialer Dialer
+	addr        string
+	dialer      Dialer
+	authMethods []AuthMethod
 }
 
 func New(addr string, optFns ...func(*Options)) *Server {
 	options := Options{
-		Logger: golog.NewGoLogger(golog.INFO, log.Default()),
-		Dialer: &net.Dialer{},
+		Logger:      golog.NewGoLogger(golog.INFO, log.Default()),
+		Dialer:      &net.Dialer{},
+		AuthMethods: []AuthMethod{AuthMethodNotRequired},
 	}
 
 	for _, fn := range optFns {
@@ -34,9 +40,10 @@ func New(addr string, optFns ...func(*Options)) *Server {
 	}
 
 	return &Server{
-		logger: &logger{options.Logger},
-		addr:   addr,
-		dialer: options.Dialer,
+		logger:      &logger{options.Logger},
+		addr:        addr,
+		dialer:      options.Dialer,
+		authMethods: options.AuthMethods,
 	}
 }
 
@@ -78,33 +85,29 @@ func (s *Server) handleConnection(conn net.Conn) error {
 		_ = conn.Close()
 	}()
 
-	reader := bufio.NewReader(conn)
+	socksConn := NewConn(conn)
 
-	version, err := reader.Peek(1)
+	version, err := socksConn.Peek(1)
 	if err != nil {
 		s.logErrorf("Failed to get version byte: %v", err)
 		return err
 	}
 
-	socksConn := &socksConn{
-		reader: reader,
-		writer: conn,
-	}
-
 	switch Version(version[0]) {
 	case Socks4Version:
 		socks4Handler := &socks4Handler{
-			logger:    s.logger,
-			dialer:    s.dialer,
-			socksConn: socksConn,
+			logger: s.logger,
+			dialer: s.dialer,
+			conn:   socksConn,
 		}
 
 		return socks4Handler.handle()
 	case Socks5Version:
 		socks5Handler := &socks5Handler{
-			logger:    s.logger,
-			dialer:    s.dialer,
-			socksConn: socksConn,
+			logger:      s.logger,
+			dialer:      s.dialer,
+			conn:        socksConn,
+			authMethods: s.authMethods,
 		}
 
 		return socks5Handler.handle()

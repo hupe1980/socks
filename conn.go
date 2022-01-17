@@ -1,6 +1,7 @@
 package socks
 
 import (
+	"bufio"
 	"context"
 	"encoding"
 	"io"
@@ -11,12 +12,23 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-type socksConn struct {
-	reader io.Reader
+type Conn struct {
+	reader *bufio.Reader
 	writer io.Writer
 }
 
-func (c *socksConn) read(req encoding.BinaryUnmarshaler) error {
+func NewConn(conn net.Conn) *Conn {
+	return &Conn{
+		reader: bufio.NewReader(conn),
+		writer: conn,
+	}
+}
+
+func (c *Conn) Peek(n int) ([]byte, error) {
+	return c.reader.Peek(n)
+}
+
+func (c *Conn) Read(req encoding.BinaryUnmarshaler) error {
 	buff := make([]byte, 1024)
 
 	n, err := c.reader.Read(buff)
@@ -31,7 +43,7 @@ func (c *socksConn) read(req encoding.BinaryUnmarshaler) error {
 	return nil
 }
 
-func (c *socksConn) write(resp encoding.BinaryMarshaler) error {
+func (c *Conn) Write(resp encoding.BinaryMarshaler) error {
 	b, err := resp.MarshalBinary()
 	if err != nil {
 		return err
@@ -44,7 +56,7 @@ func (c *socksConn) write(resp encoding.BinaryMarshaler) error {
 	return nil
 }
 
-func (c *socksConn) connect(target net.Conn) error {
+func (c *Conn) Connect(target net.Conn) error {
 	errCh := make(chan error, 2)
 
 	go proxy(target, c.reader, errCh)

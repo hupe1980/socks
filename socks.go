@@ -69,12 +69,25 @@ const (
 	AddrTypeIPv6 AddrType = 0x04
 )
 
+type UsernamePasswordAuthVersion uint8
+
+const (
+	UsernamePasswordAuthVersion1 = 0x01
+)
+
 type AuthMethod uint8
 
 const (
 	AuthMethodNotRequired         AuthMethod = 0x00 // no authentication required
 	AuthMethodUsernamePassword    AuthMethod = 0x02 // use username/password
 	AuthMethodNoAcceptableMethods AuthMethod = 0xff // no acceptable authentication methods
+)
+
+type AuthStatus uint8
+
+const (
+	AuthStatusSuccess AuthStatus = 0x00
+	AuthStatusFailure AuthStatus = 0xff
 )
 
 type Socks4Request struct {
@@ -134,6 +147,10 @@ func (req *Socks4Request) UnmarshalBinary(p []byte) error {
 	}
 
 	req.Version = Version(version[0])
+
+	if req.Version != Socks4Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", req.Version)
+	}
 
 	cmd := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &cmd); err != nil {
@@ -282,6 +299,89 @@ func (resp *MethodSelectResponse) UnmarshalBinary(p []byte) error {
 	return nil
 }
 
+type UsernamePasswordAuthRequest struct {
+	Version  UsernamePasswordAuthVersion
+	Username string
+	Password string
+}
+
+func (req *UsernamePasswordAuthRequest) MarshalBinary() ([]byte, error) {
+	b := []byte{byte(req.Version)}
+
+	b = append(b, byte(len(req.Username)))
+	b = append(b, []byte(req.Username)...)
+
+	b = append(b, byte(len(req.Password)))
+	b = append(b, []byte(req.Password)...)
+
+	return b, nil
+}
+
+func (req *UsernamePasswordAuthRequest) UnmarshalBinary(p []byte) error {
+	r := bytes.NewBuffer(p)
+
+	version := make([]byte, 1)
+	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
+		return err
+	}
+
+	req.Version = UsernamePasswordAuthVersion(version[0])
+
+	length := make([]byte, 1)
+	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		return err
+	}
+
+	username := make([]byte, length[0])
+	if err := binary.Read(r, binary.BigEndian, &username); err != nil {
+		return err
+	}
+
+	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		return err
+	}
+
+	req.Username = string(username)
+
+	password := make([]byte, length[0])
+	if err := binary.Read(r, binary.BigEndian, &password); err != nil {
+		return err
+	}
+
+	req.Password = string(password)
+
+	return nil
+}
+
+type UsernamePasswordAuthResponse struct {
+	Version UsernamePasswordAuthVersion
+	Status  AuthStatus
+}
+
+func (resp *UsernamePasswordAuthResponse) MarshalBinary() ([]byte, error) {
+	return []byte{byte(resp.Version), byte(resp.Status)}, nil
+}
+
+func (resp *UsernamePasswordAuthResponse) UnmarshalBinary(p []byte) error {
+	r := bytes.NewBuffer(p)
+
+	version := make([]byte, 1)
+	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
+		return err
+	}
+
+	resp.Version = UsernamePasswordAuthVersion(version[0])
+
+	status := make([]byte, 1)
+	if err := binary.Read(r, binary.BigEndian, &status); err != nil {
+		return err
+	}
+
+	resp.Status = AuthStatus(status[0])
+
+	return nil
+}
+
 type Socks5Request struct {
 	Version Version
 	CMD     Command
@@ -329,6 +429,10 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 	}
 
 	req.Version = Version(version[0])
+
+	if req.Version != Socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", req.Version)
+	}
 
 	cmd := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &cmd); err != nil {
