@@ -2,17 +2,12 @@ package socks
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"log"
 	"net"
 
 	"github.com/hupe1980/golog"
 )
-
-type Dialer interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
-}
 
 type Options struct {
 	// Logger specifies an optional logger.
@@ -83,16 +78,16 @@ func (s *Server) handleConnection(conn net.Conn) error {
 		_ = conn.Close()
 	}()
 
-	bufConn := bufio.NewReader(conn)
+	reader := bufio.NewReader(conn)
 
-	version, err := bufConn.Peek(1)
+	version, err := reader.Peek(1)
 	if err != nil {
 		s.logErrorf("Failed to get version byte: %v", err)
 		return err
 	}
 
 	socksConn := &socksConn{
-		reader: bufConn,
+		reader: reader,
 		writer: conn,
 	}
 

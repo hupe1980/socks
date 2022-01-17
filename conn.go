@@ -1,10 +1,15 @@
 package socks
 
 import (
+	"context"
 	"encoding"
 	"io"
 	"net"
 )
+
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
 
 type socksConn struct {
 	reader io.Reader

@@ -5,27 +5,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log"
 	"net"
+
+	"github.com/hupe1980/golog"
 )
 
+type Socks4DialerOptions struct {
+	// Logger specifies an optional logger.
+	// If nil, logging is done via the log package's standard logger.
+	Logger golog.Logger
+
+	// ProxyDialer specifies the optional dialer for
+	// establishing the transport connection.
+	ProxyDialer Dialer
+}
+
 type Socks4Dialer struct {
+	*logger
 	cmd          Command
 	proxyNetwork string // network between a proxy server and a client
 	proxyAddress string // proxy server address
-
-	// ProxyDial specifies the optional dial function for
-	// establishing the transport connection.
-	ProxyDial func(context.Context, string, string) (net.Conn, error)
+	proxyDialer  Dialer
 }
 
 // NewSocks4Dialer returns a new Socks4Dialer that dials through the provided
 // proxy server's network and address.
-func NewSocks4Dialer(network, address string) *Socks4Dialer {
+func NewSocks4Dialer(network, address string, optFns ...func(*Socks4DialerOptions)) *Socks4Dialer {
+	options := Socks4DialerOptions{
+		Logger:      golog.NewGoLogger(golog.INFO, log.Default()),
+		ProxyDialer: &net.Dialer{},
+	}
+
+	for _, fn := range optFns {
+		fn(&options)
+	}
+
 	return &Socks4Dialer{
+		logger:       &logger{options.Logger},
 		cmd:          ConnectCommand,
 		proxyNetwork: network,
 		proxyAddress: address,
+		proxyDialer:  options.ProxyDialer,
 	}
 }
 
@@ -34,18 +55,7 @@ func (d *Socks4Dialer) Dial(network, addr string) (net.Conn, error) {
 }
 
 func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	var (
-		err  error
-		conn net.Conn
-	)
-
-	if d.ProxyDial != nil {
-		conn, err = d.ProxyDial(ctx, d.proxyNetwork, d.proxyAddress)
-	} else {
-		var dd net.Dialer
-		conn, err = dd.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
-	}
-
+	conn, err := d.proxyDialer.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -75,14 +85,16 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	return conn, nil
 }
 
-type Socks5Dialer struct {
-	cmd          Command
-	proxyNetwork string // network between a proxy server and a client
-	proxyAddress string // proxy server address
+type AuthenticateFunc func(context.Context, *socksConn, AuthMethod) error
 
-	// ProxyDial specifies the optional dial function for
+type Socks5DialerOptions struct {
+	// Logger specifies an optional logger.
+	// If nil, logging is done via the log package's standard logger.
+	Logger golog.Logger
+
+	// ProxyDialer specifies the optional dialer for
 	// establishing the transport connection.
-	ProxyDial func(context.Context, string, string) (net.Conn, error)
+	ProxyDialer Dialer
 
 	// AuthMethods specifies the list of request authentication
 	// methods.
@@ -92,17 +104,40 @@ type Socks5Dialer struct {
 	// Authenticate specifies the optional authentication
 	// function. It must be non-nil when AuthMethods is not empty.
 	// It must return an error when the authentication is failed.
-	Authenticate func(context.Context, io.ReadWriter, AuthMethod) error
+	Authenticate AuthenticateFunc
+}
+
+type Socks5Dialer struct {
+	*logger
+	cmd          Command
+	proxyNetwork string // network between a proxy server and a client
+	proxyAddress string // proxy server address
+	proxyDialer  Dialer
+	authMethods  []AuthMethod
+	authenticate AuthenticateFunc
 }
 
 // NewSocks5Dialer returns a new Socks5Dialer that dials through the provided
 // proxy server's network and address.
-func NewSocks5Dialer(network, address string) *Socks5Dialer {
+func NewSocks5Dialer(network, address string, optFns ...func(*Socks5DialerOptions)) *Socks5Dialer {
+	options := Socks5DialerOptions{
+		Logger:      golog.NewGoLogger(golog.INFO, log.Default()),
+		ProxyDialer: &net.Dialer{},
+		AuthMethods: []AuthMethod{AuthMethodNotRequired},
+	}
+
+	for _, fn := range optFns {
+		fn(&options)
+	}
+
 	return &Socks5Dialer{
+		logger:       &logger{options.Logger},
 		cmd:          ConnectCommand,
 		proxyNetwork: network,
 		proxyAddress: address,
-		AuthMethods:  []AuthMethod{AuthMethodNotRequired},
+		proxyDialer:  options.ProxyDialer,
+		authMethods:  options.AuthMethods,
+		authenticate: options.Authenticate,
 	}
 }
 
@@ -111,18 +146,7 @@ func (d *Socks5Dialer) Dial(network, addr string) (net.Conn, error) {
 }
 
 func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	var (
-		err  error
-		conn net.Conn
-	)
-
-	if d.ProxyDial != nil {
-		conn, err = d.ProxyDial(ctx, d.proxyNetwork, d.proxyAddress)
-	} else {
-		var dd net.Dialer
-		conn, err = dd.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
-	}
-
+	conn, err := d.proxyDialer.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +158,7 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 
 	if err := socksConn.write(&MethodSelectRequest{
 		Version: Socks5Version,
-		Methods: d.AuthMethods,
+		Methods: d.authMethods,
 	}); err != nil {
 		return nil, err
 	}
@@ -146,6 +170,12 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 
 	if methodSelectResp.Method == AuthMethodNoAcceptableMethods {
 		return nil, errors.New("no acceptable authentication methods")
+	}
+
+	if d.authenticate != nil {
+		if err := d.authenticate(ctx, socksConn, methodSelectResp.Method); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := socksConn.write(&Socks5Request{
