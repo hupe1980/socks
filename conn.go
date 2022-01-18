@@ -56,7 +56,7 @@ func (c *Conn) Write(resp encoding.BinaryMarshaler) error {
 	return nil
 }
 
-func (c *Conn) Connect(target net.Conn) error {
+func (c *Conn) Tunnel(target net.Conn) error {
 	errCh := make(chan error, 2)
 
 	go proxy(target, c.reader, errCh)

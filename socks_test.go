@@ -82,6 +82,7 @@ func TestSocks4Response(t *testing.T) {
 	t.Run("connect", func(t *testing.T) {
 		resp := &Socks4Response{
 			Status: Socks4StatusGranted,
+			Addr:   "",
 		}
 
 		b, err := resp.MarshalBinary()
@@ -92,7 +93,23 @@ func TestSocks4Response(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, resp, resp2)
-	}) // TODO BIND
+	})
+
+	t.Run("bind", func(t *testing.T) {
+		resp := &Socks4Response{
+			Status: Socks4StatusGranted,
+			Addr:   "127.0.0.1:5566",
+		}
+
+		b, err := resp.MarshalBinary()
+		assert.NoError(t, err)
+
+		resp2 := &Socks4Response{}
+		err = resp2.UnmarshalBinary(b)
+		assert.NoError(t, err)
+
+		assert.Equal(t, resp, resp2)
+	})
 }
 
 func TestMethodSelectRequest(t *testing.T) {

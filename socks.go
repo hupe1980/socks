@@ -206,18 +206,19 @@ func (resp *Socks4Response) MarshalBinary() ([]byte, error) {
 	b := []byte{0, byte(resp.Status)}
 
 	if resp.Addr == "" {
-		b = append(b, []byte{0, 0, 0, 0, 0, 0}...)
+		return b, nil
 	}
 
-	// TODO BIND
-	// _, port, err := splitHostPort(resp.Addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	host, port, err := splitHostPort(resp.Addr)
+	if err != nil {
+		return nil, err
+	}
 
-	// b = append(b, byte(port>>8), byte(port))
+	b = append(b, byte(port>>8), byte(port))
 
-	// b = append(b, net.IP{127, 0, 0, 1}...)
+	ip := net.ParseIP(host)
+
+	b = append(b, ip.To4()...)
 
 	return b, nil
 }
@@ -232,6 +233,22 @@ func (resp *Socks4Response) UnmarshalBinary(p []byte) error {
 	}
 
 	resp.Status = Socks4Status(status[0])
+
+	if len(p) > 2 {
+		port := make([]byte, 2)
+		if err := binary.Read(r, binary.BigEndian, &port); err != nil {
+			return err
+		}
+
+		portNum := (int(port[0]) << 8) | int(port[1])
+
+		ip := make(net.IP, 4)
+		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
+			return err
+		}
+
+		resp.Addr = net.JoinHostPort(ip.String(), strconv.Itoa(portNum))
+	}
 
 	return nil
 }

@@ -3,6 +3,7 @@ package socks
 import (
 	"context"
 	"errors"
+	"net"
 	"strings"
 )
 
@@ -21,7 +22,9 @@ func (h *socks4Handler) handle() error {
 	switch req.CMD {
 	case ConnectCommand:
 		return h.handleConnect(req)
-	case BindCommand, AssociateCommand:
+	case BindCommand:
+		return h.handleBind(req)
+	case AssociateCommand:
 		fallthrough
 	default:
 		if err := h.conn.Write(&Socks4Response{
@@ -58,7 +61,53 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 		return err
 	}
 
-	return h.conn.Connect(target)
+	return h.conn.Tunnel(target)
+}
+
+func (h *socks4Handler) handleBind(req *Socks4Request) error {
+	var lc net.ListenConfig
+
+	listener, err := lc.Listen(context.Background(), "tcp", req.Addr)
+	if err != nil {
+		writeErr := h.conn.Write(&Socks4Response{
+			Status: Socks4StatusRejected,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
+	if err = h.conn.Write(&Socks4Response{
+		Status: Socks4StatusGranted,
+		Addr:   listener.Addr().String(),
+	}); err != nil {
+		return err
+	}
+
+	conn, err := listener.Accept()
+	if err != nil {
+		writeErr := h.conn.Write(&Socks4Response{
+			Status: Socks4StatusRejected,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
+	listener.Close()
+
+	if err := h.conn.Write(&Socks4Response{
+		Status: Socks4StatusGranted,
+		Addr:   conn.RemoteAddr().String(),
+	}); err != nil {
+		return err
+	}
+
+	return h.conn.Tunnel(conn)
 }
 
 type socks5Handler struct {
@@ -164,5 +213,5 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 		return err
 	}
 
-	return h.conn.Connect(target)
+	return h.conn.Tunnel(target)
 }
