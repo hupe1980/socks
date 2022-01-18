@@ -53,7 +53,7 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 
 	if err := h.conn.Write(&Socks4Response{
 		Status: Socks4StatusGranted,
-		Addr:   req.Addr,
+		Addr:   "",
 	}); err != nil {
 		return err
 	}

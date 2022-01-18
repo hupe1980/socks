@@ -113,7 +113,7 @@ func (req *Socks4Request) MarshalBinary() ([]byte, error) {
 	var domain string
 
 	if ip := net.ParseIP(host); ip != nil {
-		dstIP = ip
+		dstIP = ip.To4()
 	} else {
 		dstIP[0] = 0
 		dstIP[1] = 0
@@ -169,7 +169,7 @@ func (req *Socks4Request) UnmarshalBinary(p []byte) error {
 
 	portNum := (int(port[0]) << 8) | int(port[1])
 
-	ip := make([]byte, 4)
+	ip := make(net.IP, 4)
 	if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (req *Socks4Request) UnmarshalBinary(p []byte) error {
 
 	socks4a := (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] != 0)
 
-	req.Addr = fmt.Sprintf("%s:%d", ip, portNum)
+	req.Addr = net.JoinHostPort(ip.String(), strconv.Itoa(portNum))
 
 	if socks4a {
 		domain, err := r.ReadString(0)
@@ -191,7 +191,7 @@ func (req *Socks4Request) UnmarshalBinary(p []byte) error {
 			return err
 		}
 
-		req.Addr = fmt.Sprintf("%s:%d", strings.TrimSuffix(domain, "\x00"), portNum)
+		req.Addr = net.JoinHostPort(strings.TrimSuffix(domain, "\x00"), strconv.Itoa(portNum))
 	}
 
 	return nil
@@ -205,14 +205,19 @@ type Socks4Response struct {
 func (resp *Socks4Response) MarshalBinary() ([]byte, error) {
 	b := []byte{0, byte(resp.Status)}
 
-	_, port, err := splitHostPort(resp.Addr)
-	if err != nil {
-		return nil, err
+	if resp.Addr == "" {
+		b = append(b, []byte{0, 0, 0, 0, 0, 0}...)
 	}
 
-	b = append(b, byte(port>>8), byte(port))
+	// TODO BIND
+	// _, port, err := splitHostPort(resp.Addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	b = append(b, net.IP{127, 0, 0, 1}...)
+	// b = append(b, byte(port>>8), byte(port))
+
+	// b = append(b, net.IP{127, 0, 0, 1}...)
 
 	return b, nil
 }
@@ -457,19 +462,19 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 
 	switch AddrType(atype[0]) {
 	case AddrTypeIPv4:
-		ip := make([]byte, net.IPv4len)
+		ip := make(net.IP, net.IPv4len)
 		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
 			return err
 		}
 
-		host = string(ip)
+		host = ip.String()
 	case AddrTypeIPv6:
-		ip := make([]byte, net.IPv6len)
+		ip := make(net.IP, net.IPv6len)
 		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
 			return err
 		}
 
-		host = string(ip)
+		host = ip.String()
 	case AddrTypeFQDN:
 		length := make([]byte, 1)
 		if err := binary.Read(r, binary.BigEndian, &length); err != nil {
@@ -493,7 +498,7 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 
 	portNum := (int(port[0]) << 8) | int(port[1])
 
-	req.Addr = fmt.Sprintf("%s:%d", host, portNum)
+	req.Addr = net.JoinHostPort(host, strconv.Itoa(portNum))
 
 	return nil
 }
