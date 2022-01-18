@@ -236,8 +236,16 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	var lc net.ListenConfig
 
-	listener, err := lc.Listen(context.Background(), "tcp", req.Addr)
+	listener, err := lc.Listen(context.Background(), "tcp", ":0")
 	if err != nil {
+		writeErr := h.conn.Write(&Socks5Response{
+			Version: Socks5Version,
+			Status:  Socks5StatusFailure,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
 		return err
 	}
 
@@ -287,6 +295,31 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	}
 
 	return h.conn.Tunnel(conn)
+}
+
+func (h *socks5Handler) handleAssociate(req *Socks5Request) error {
+	var lc net.ListenConfig
+
+	udpConn, err := lc.ListenPacket(context.Background(), "udp", req.Addr)
+	if err != nil {
+		writeErr := h.conn.Write(&Socks5Response{
+			Version: Socks5Version,
+			Status:  Socks5StatusFailure,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
+	defer func() {
+		_ = udpConn.Close()
+	}()
+
+	// TODO
+
+	return nil
 }
 
 func checkAllowedBind(expected, actual string) error {
