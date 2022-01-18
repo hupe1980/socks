@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -470,52 +471,12 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	atype := make([]byte, 1)
-	if err := binary.Read(r, binary.BigEndian, &atype); err != nil {
+	addr, err := readAddr(r)
+	if err != nil {
 		return err
 	}
 
-	var host string
-
-	switch AddrType(atype[0]) {
-	case AddrTypeIPv4:
-		ip := make(net.IP, net.IPv4len)
-		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
-			return err
-		}
-
-		host = ip.String()
-	case AddrTypeIPv6:
-		ip := make(net.IP, net.IPv6len)
-		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
-			return err
-		}
-
-		host = ip.String()
-	case AddrTypeFQDN:
-		length := make([]byte, 1)
-		if err := binary.Read(r, binary.BigEndian, &length); err != nil {
-			return err
-		}
-
-		fqdn := make([]byte, length[0])
-		if err := binary.Read(r, binary.BigEndian, &fqdn); err != nil {
-			return err
-		}
-
-		host = string(fqdn)
-	default:
-		return fmt.Errorf("unknown address type %x", atype[0])
-	}
-
-	port := make([]byte, 2)
-	if err := binary.Read(r, binary.BigEndian, &port); err != nil {
-		return err
-	}
-
-	portNum := (int(port[0]) << 8) | int(port[1])
-
-	req.Addr = net.JoinHostPort(host, strconv.Itoa(portNum))
+	req.Addr = addr
 
 	return nil
 }
@@ -528,6 +489,27 @@ type Socks5Response struct {
 
 func (resp *Socks5Response) MarshalBinary() ([]byte, error) {
 	b := []byte{byte(resp.Version), byte(resp.Status), 0}
+
+	if resp.Addr == "" {
+		return b, nil
+	}
+
+	host, port, err := splitHostPort(resp.Addr)
+	if err != nil {
+		return nil, err
+	}
+
+	ip := net.ParseIP(host)
+
+	if ip4 := ip.To4(); ip4 != nil {
+		b = append(b, byte(AddrTypeIPv4))
+		b = append(b, ip4...)
+	} else if ip6 := ip.To16(); ip6 != nil {
+		b = append(b, byte(AddrTypeIPv6))
+		b = append(b, ip6...)
+	}
+
+	b = append(b, byte(port>>8), byte(port))
 
 	return b, nil
 }
@@ -542,7 +524,75 @@ func (resp *Socks5Response) UnmarshalBinary(p []byte) error {
 
 	resp.Version = Version(version[0])
 
+	status := make([]byte, 1)
+
+	if err := binary.Read(r, binary.BigEndian, &status); err != nil {
+		return err
+	}
+
+	resp.Status = Socks5Status(status[0])
+
+	_, _ = r.ReadByte() // ignore null byte
+
+	if len(p) > 3 {
+		addr, err := readAddr(r)
+		if err != nil {
+			return err
+		}
+
+		resp.Addr = addr
+	}
+
 	return nil
+}
+
+func readAddr(r io.Reader) (string, error) {
+	atype := make([]byte, 1)
+	if err := binary.Read(r, binary.BigEndian, &atype); err != nil {
+		return "", err
+	}
+
+	var host string
+
+	switch AddrType(atype[0]) {
+	case AddrTypeIPv4:
+		ip := make(net.IP, net.IPv4len)
+		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
+			return "", err
+		}
+
+		host = ip.String()
+	case AddrTypeIPv6:
+		ip := make(net.IP, net.IPv6len)
+		if err := binary.Read(r, binary.BigEndian, &ip); err != nil {
+			return "", err
+		}
+
+		host = ip.String()
+	case AddrTypeFQDN:
+		length := make([]byte, 1)
+		if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+			return "", err
+		}
+
+		fqdn := make([]byte, length[0])
+		if err := binary.Read(r, binary.BigEndian, &fqdn); err != nil {
+			return "", err
+		}
+
+		host = string(fqdn)
+	default:
+		return "", fmt.Errorf("unknown address type %x", atype[0])
+	}
+
+	port := make([]byte, 2)
+	if err := binary.Read(r, binary.BigEndian, &port); err != nil {
+		return "", err
+	}
+
+	portNum := (int(port[0]) << 8) | int(port[1])
+
+	return net.JoinHostPort(host, strconv.Itoa(portNum)), nil
 }
 
 func splitHostPort(address string) (string, uint16, error) {

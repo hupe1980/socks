@@ -3,6 +3,7 @@ package socks
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 )
@@ -67,7 +68,7 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 func (h *socks4Handler) handleBind(req *Socks4Request) error {
 	var lc net.ListenConfig
 
-	listener, err := lc.Listen(context.Background(), "tcp", req.Addr)
+	listener, err := lc.Listen(context.Background(), "tcp", ":0") // use a free port
 	if err != nil {
 		writeErr := h.conn.Write(&Socks4Response{
 			Status: Socks4StatusRejected,
@@ -90,6 +91,7 @@ func (h *socks4Handler) handleBind(req *Socks4Request) error {
 	if err != nil {
 		writeErr := h.conn.Write(&Socks4Response{
 			Status: Socks4StatusRejected,
+			Addr:   conn.RemoteAddr().String(),
 		})
 		if writeErr != nil {
 			return writeErr
@@ -100,9 +102,22 @@ func (h *socks4Handler) handleBind(req *Socks4Request) error {
 
 	listener.Close()
 
+	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
+		_ = conn.Close()
+
+		writeErr := h.conn.Write(&Socks4Response{
+			Status: Socks4StatusRejected,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
 	if err := h.conn.Write(&Socks4Response{
 		Status: Socks4StatusGranted,
-		Addr:   conn.RemoteAddr().String(),
+		Addr:   "",
 	}); err != nil {
 		return err
 	}
@@ -214,4 +229,78 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 	}
 
 	return h.conn.Tunnel(target)
+}
+
+func (h *socks5Handler) handleBind(req *Socks4Request) error {
+	var lc net.ListenConfig
+
+	listener, err := lc.Listen(context.Background(), "tcp", req.Addr)
+	if err != nil {
+		return err
+	}
+
+	if err = h.conn.Write(&Socks5Response{
+		Version: Socks5Version,
+		Status:  Socks5StatusGranted,
+		Addr:    listener.Addr().String(),
+	}); err != nil {
+		return err
+	}
+
+	conn, err := listener.Accept()
+	if err != nil {
+		writeErr := h.conn.Write(&Socks5Response{
+			Version: Socks5Version,
+			Status:  Socks5StatusFailure,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
+	listener.Close()
+
+	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
+		_ = conn.Close()
+
+		writeErr := h.conn.Write(&Socks5Response{
+			Version: Socks5Version,
+			Status:  Socks5StatusFailure,
+		})
+		if writeErr != nil {
+			return writeErr
+		}
+
+		return err
+	}
+
+	if err := h.conn.Write(&Socks5Response{
+		Version: Socks5Version,
+		Status:  Socks5StatusGranted,
+		Addr:    conn.RemoteAddr().String(),
+	}); err != nil {
+		return err
+	}
+
+	return h.conn.Tunnel(conn)
+}
+
+func checkAllowedBind(expected, actual string) error {
+	expectedIP, _, err := net.SplitHostPort(expected)
+	if err != nil {
+		return err
+	}
+
+	actualIP, _, err := net.SplitHostPort(actual)
+	if err != nil {
+		return err
+	}
+
+	if expectedIP != actualIP {
+		return fmt.Errorf("ip mismatch. Expected %s. Got %s", expectedIP, actualIP)
+	}
+
+	return nil
 }

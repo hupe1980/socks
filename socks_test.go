@@ -252,7 +252,7 @@ func TestSocks5Response(t *testing.T) {
 	t.Run("connect", func(t *testing.T) {
 		resp := &Socks5Response{
 			Version: Socks5Version,
-			Status:  Socks5StatusGranted,
+			Status:  Socks5StatusFailure,
 		}
 
 		b, err := resp.MarshalBinary()
@@ -263,5 +263,22 @@ func TestSocks5Response(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, resp, resp2)
-	}) // TODO BIND / Addr
+	})
+
+	t.Run("bind", func(t *testing.T) {
+		resp := &Socks5Response{
+			Version: Socks5Version,
+			Status:  Socks5StatusGranted,
+			Addr:    "127.0.0.1:5544",
+		}
+
+		b, err := resp.MarshalBinary()
+		assert.NoError(t, err)
+
+		resp2 := &Socks5Response{}
+		err = resp2.UnmarshalBinary(b)
+		assert.NoError(t, err)
+
+		assert.Equal(t, resp, resp2)
+	})
 }
