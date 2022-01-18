@@ -100,7 +100,7 @@ func (h *socks4Handler) handleBind(req *Socks4Request) error {
 		return err
 	}
 
-	listener.Close()
+	_ = listener.Close()
 
 	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
 		_ = conn.Close()
@@ -166,7 +166,9 @@ func (h *socks5Handler) handle() error {
 	switch req.CMD {
 	case ConnectCommand:
 		return h.handleConnect(req)
-	case BindCommand, AssociateCommand:
+	case BindCommand:
+		return h.handleBind(req)
+	case AssociateCommand:
 		fallthrough
 	default:
 		if err := h.conn.Write(&Socks5Response{
@@ -231,7 +233,7 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 	return h.conn.Tunnel(target)
 }
 
-func (h *socks5Handler) handleBind(req *Socks4Request) error {
+func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	var lc net.ListenConfig
 
 	listener, err := lc.Listen(context.Background(), "tcp", req.Addr)
@@ -260,7 +262,7 @@ func (h *socks5Handler) handleBind(req *Socks4Request) error {
 		return err
 	}
 
-	listener.Close()
+	_ = listener.Close()
 
 	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
 		_ = conn.Close()
