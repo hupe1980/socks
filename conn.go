@@ -12,6 +12,10 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
+type Listener interface {
+	Listen(ctx context.Context, network string, address string) (net.Listener, error)
+}
+
 type Conn struct {
 	reader *bufio.Reader
 	writer io.Writer

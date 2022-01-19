@@ -10,8 +10,9 @@ import (
 
 type socks4Handler struct {
 	*logger
-	conn   *Conn
-	dialer Dialer
+	conn     *Conn
+	dialer   Dialer
+	listener Listener
 }
 
 func (h *socks4Handler) handle() error {
@@ -66,9 +67,7 @@ func (h *socks4Handler) handleConnect(req *Socks4Request) error {
 }
 
 func (h *socks4Handler) handleBind(req *Socks4Request) error {
-	var lc net.ListenConfig
-
-	listener, err := lc.Listen(context.Background(), "tcp", ":0") // use a free port
+	listener, err := h.listener.Listen(context.Background(), "tcp", ":0") // use a free port
 	if err != nil {
 		writeErr := h.conn.Write(&Socks4Response{
 			Status: Socks4StatusRejected,
@@ -133,6 +132,7 @@ type socks5Handler struct {
 	*logger
 	conn         *Conn
 	dialer       Dialer
+	listener     Listener
 	authMethods  []AuthMethod
 	authenticate AuthenticateFunc
 }
@@ -234,9 +234,7 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 }
 
 func (h *socks5Handler) handleBind(req *Socks5Request) error {
-	var lc net.ListenConfig
-
-	listener, err := lc.Listen(context.Background(), "tcp", ":0")
+	listener, err := h.listener.Listen(context.Background(), "tcp", ":0")
 	if err != nil {
 		writeErr := h.conn.Write(&Socks5Response{
 			Status: Socks5StatusFailure,

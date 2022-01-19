@@ -15,6 +15,8 @@ type Options struct {
 
 	Dialer Dialer
 
+	Listener Listener
+
 	// AuthMethods specifies the list of supported authentication
 	// methods.
 	// If empty, SOCKS server supports AuthMethodNotRequired.
@@ -30,6 +32,7 @@ type Server struct {
 	*logger
 	addr         string
 	dialer       Dialer
+	listener     Listener
 	authMethods  []AuthMethod
 	authenticate AuthenticateFunc
 }
@@ -38,6 +41,7 @@ func New(addr string, optFns ...func(*Options)) *Server {
 	options := Options{
 		Logger:      golog.NewGoLogger(golog.INFO, log.Default()),
 		Dialer:      &net.Dialer{},
+		Listener:    &net.ListenConfig{},
 		AuthMethods: []AuthMethod{AuthMethodNotRequired},
 	}
 
@@ -49,6 +53,7 @@ func New(addr string, optFns ...func(*Options)) *Server {
 		logger:       &logger{options.Logger},
 		addr:         addr,
 		dialer:       options.Dialer,
+		listener:     options.Listener,
 		authMethods:  options.AuthMethods,
 		authenticate: options.Authenticate,
 	}
