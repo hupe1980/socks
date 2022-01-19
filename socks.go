@@ -49,6 +49,21 @@ const (
 	Socks4StatusInvalidUserID Socks4Status = 0x5d
 )
 
+func (code Socks4Status) String() string {
+	switch code {
+	case Socks4StatusGranted:
+		return "request granted"
+	case Socks4StatusRejected:
+		return "request rejected or failed"
+	case Socks4StatusNoIdentd:
+		return "request rejected because SOCKS server cannot connect to identd on the client"
+	case Socks4StatusInvalidUserID:
+		return "request rejected because the client program and identd report different user-ids"
+	default:
+		return "unknown code: " + strconv.Itoa(int(code))
+	}
+}
+
 type Socks5Status uint8
 
 const (
@@ -63,12 +78,37 @@ const (
 	Socks5StatusAddrTypeNotSupported Socks5Status = 0x08
 )
 
+func (code Socks5Status) String() string {
+	switch code {
+	case Socks5StatusGranted:
+		return "succeeded"
+	case Socks5StatusFailure:
+		return "general SOCKS server failure"
+	case Socks5StatusNotAllowed:
+		return "connection not allowed by ruleset"
+	case Socks5StatusNetworkUnreaachable:
+		return "network unreachable"
+	case Socks5StatusHostUnreachable:
+		return "host unreachable"
+	case Socks5StatusConnectionRefused:
+		return "connection refused"
+	case Socks5StatusTTLExpired:
+		return "TTL expired"
+	case Socks5StatusCMDNotSupported:
+		return "Command not supported"
+	case Socks5StatusAddrTypeNotSupported:
+		return "address type not supported"
+	default:
+		return "unknown code: " + strconv.Itoa(int(code))
+	}
+}
+
 type AddrType uint8
 
 const (
-	AddrTypeIPv4 AddrType = 0x01
-	AddrTypeFQDN AddrType = 0x03
-	AddrTypeIPv6 AddrType = 0x04
+	AddrTypeIPv4 AddrType = 0x01 // IPv4
+	AddrTypeFQDN AddrType = 0x03 // FQDN
+	AddrTypeIPv6 AddrType = 0x04 // IPv6
 )
 
 type UsernamePasswordAuthVersion uint8
@@ -81,6 +121,7 @@ type AuthMethod uint8
 
 const (
 	AuthMethodNotRequired         AuthMethod = 0x00 // no authentication required
+	AuthMethodGSSAPI              AuthMethod = 0x01 // use GSSAPI
 	AuthMethodUsernamePassword    AuthMethod = 0x02 // use username/password
 	AuthMethodNoAcceptableMethods AuthMethod = 0xff // no acceptable authentication methods
 )
@@ -95,14 +136,13 @@ const (
 type AuthenticateFunc func(context.Context, *Conn, AuthMethod) error
 
 type Socks4Request struct {
-	Version Version
-	CMD     Command
-	Addr    string
-	UserID  string
+	CMD    Command
+	Addr   string
+	UserID string
 }
 
 func (req *Socks4Request) MarshalBinary() ([]byte, error) {
-	b := []byte{byte(req.Version), byte(req.CMD)}
+	b := []byte{byte(Socks4Version), byte(req.CMD)}
 
 	host, port, err := splitHostPort(req.Addr)
 	if err != nil {
@@ -150,10 +190,8 @@ func (req *Socks4Request) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	req.Version = Version(version[0])
-
-	if req.Version != Socks4Version {
-		return fmt.Errorf("unsupported SOCKS version: %d", req.Version)
+	if Version(version[0]) != Socks4Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", version[0])
 	}
 
 	cmd := make([]byte, 1)
@@ -255,12 +293,11 @@ func (resp *Socks4Response) UnmarshalBinary(p []byte) error {
 }
 
 type MethodSelectRequest struct {
-	Version Version
 	Methods []AuthMethod
 }
 
 func (req *MethodSelectRequest) MarshalBinary() ([]byte, error) {
-	b := []byte{byte(req.Version), byte(len(req.Methods))}
+	b := []byte{byte(Socks5Version), byte(len(req.Methods))}
 
 	for _, m := range req.Methods {
 		b = append(b, byte(m))
@@ -277,7 +314,9 @@ func (req *MethodSelectRequest) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	req.Version = Version(version[0])
+	if Version(version[0]) != Socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", version[0])
+	}
 
 	number := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &number); err != nil {
@@ -297,12 +336,11 @@ func (req *MethodSelectRequest) UnmarshalBinary(p []byte) error {
 }
 
 type MethodSelectResponse struct {
-	Version Version
-	Method  AuthMethod
+	Method AuthMethod
 }
 
 func (resp *MethodSelectResponse) MarshalBinary() ([]byte, error) {
-	return []byte{byte(resp.Version), byte(resp.Method)}, nil
+	return []byte{byte(Socks5Version), byte(resp.Method)}, nil
 }
 
 func (resp *MethodSelectResponse) UnmarshalBinary(p []byte) error {
@@ -313,7 +351,9 @@ func (resp *MethodSelectResponse) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	resp.Version = Version(version[0])
+	if Version(version[0]) != Socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", version[0])
+	}
 
 	method := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &method); err != nil {
@@ -326,13 +366,12 @@ func (resp *MethodSelectResponse) UnmarshalBinary(p []byte) error {
 }
 
 type UsernamePasswordAuthRequest struct {
-	Version  UsernamePasswordAuthVersion
 	Username string
 	Password string
 }
 
 func (req *UsernamePasswordAuthRequest) MarshalBinary() ([]byte, error) {
-	b := []byte{byte(req.Version)}
+	b := []byte{byte(UsernamePasswordAuthVersion1)}
 
 	b = append(b, byte(len(req.Username)))
 	b = append(b, []byte(req.Username)...)
@@ -351,7 +390,9 @@ func (req *UsernamePasswordAuthRequest) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	req.Version = UsernamePasswordAuthVersion(version[0])
+	if UsernamePasswordAuthVersion(version[0]) != UsernamePasswordAuthVersion1 {
+		return fmt.Errorf("unsupported username password version: %d", version[0])
+	}
 
 	length := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
@@ -380,12 +421,11 @@ func (req *UsernamePasswordAuthRequest) UnmarshalBinary(p []byte) error {
 }
 
 type UsernamePasswordAuthResponse struct {
-	Version UsernamePasswordAuthVersion
-	Status  AuthStatus
+	Status AuthStatus
 }
 
 func (resp *UsernamePasswordAuthResponse) MarshalBinary() ([]byte, error) {
-	return []byte{byte(resp.Version), byte(resp.Status)}, nil
+	return []byte{byte(UsernamePasswordAuthVersion1), byte(resp.Status)}, nil
 }
 
 func (resp *UsernamePasswordAuthResponse) UnmarshalBinary(p []byte) error {
@@ -396,7 +436,9 @@ func (resp *UsernamePasswordAuthResponse) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	resp.Version = UsernamePasswordAuthVersion(version[0])
+	if UsernamePasswordAuthVersion(version[0]) != UsernamePasswordAuthVersion1 {
+		return fmt.Errorf("unsupported username password version: %d", version[0])
+	}
 
 	status := make([]byte, 1)
 	if err := binary.Read(r, binary.BigEndian, &status); err != nil {
@@ -409,13 +451,12 @@ func (resp *UsernamePasswordAuthResponse) UnmarshalBinary(p []byte) error {
 }
 
 type Socks5Request struct {
-	Version Version
-	CMD     Command
-	Addr    string
+	CMD  Command
+	Addr string
 }
 
 func (req *Socks5Request) MarshalBinary() ([]byte, error) {
-	b := []byte{byte(req.Version), byte(req.CMD), 0}
+	b := []byte{byte(Socks5Version), byte(req.CMD), 0}
 
 	host, port, err := splitHostPort(req.Addr)
 	if err != nil {
@@ -454,10 +495,8 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	req.Version = Version(version[0])
-
-	if req.Version != Socks5Version {
-		return fmt.Errorf("unsupported SOCKS version: %d", req.Version)
+	if Version(version[0]) != Socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", version[0])
 	}
 
 	cmd := make([]byte, 1)
@@ -482,13 +521,12 @@ func (req *Socks5Request) UnmarshalBinary(p []byte) error {
 }
 
 type Socks5Response struct {
-	Version Version
-	Status  Socks5Status
-	Addr    string
+	Status Socks5Status
+	Addr   string
 }
 
 func (resp *Socks5Response) MarshalBinary() ([]byte, error) {
-	b := []byte{byte(resp.Version), byte(resp.Status), 0}
+	b := []byte{byte(Socks5Version), byte(resp.Status), 0}
 
 	if resp.Addr == "" {
 		return b, nil
@@ -522,7 +560,9 @@ func (resp *Socks5Response) UnmarshalBinary(p []byte) error {
 		return err
 	}
 
-	resp.Version = Version(version[0])
+	if Version(version[0]) != Socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", version[0])
+	}
 
 	status := make([]byte, 1)
 

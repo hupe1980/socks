@@ -9,9 +9,8 @@ import (
 func TestSocks4Request(t *testing.T) {
 	t.Run("v4", func(t *testing.T) {
 		req := &Socks4Request{
-			Version: Socks4Version,
-			CMD:     ConnectCommand,
-			Addr:    "127.0.0.1:8080",
+			CMD:  ConnectCommand,
+			Addr: "127.0.0.1:8080",
 		}
 
 		b, err := req.MarshalBinary()
@@ -26,10 +25,9 @@ func TestSocks4Request(t *testing.T) {
 
 	t.Run("v4 with userID", func(t *testing.T) {
 		req := &Socks4Request{
-			Version: Socks4Version,
-			CMD:     ConnectCommand,
-			Addr:    "127.0.0.1:8080",
-			UserID:  "xyz",
+			CMD:    ConnectCommand,
+			Addr:   "127.0.0.1:8080",
+			UserID: "xyz",
 		}
 
 		b, err := req.MarshalBinary()
@@ -44,9 +42,8 @@ func TestSocks4Request(t *testing.T) {
 
 	t.Run("v4a", func(t *testing.T) {
 		req := &Socks4Request{
-			Version: Socks4Version,
-			CMD:     ConnectCommand,
-			Addr:    "localhost:8080",
+			CMD:  ConnectCommand,
+			Addr: "localhost:8080",
 		}
 
 		b, err := req.MarshalBinary()
@@ -61,10 +58,9 @@ func TestSocks4Request(t *testing.T) {
 
 	t.Run("v4a with userID", func(t *testing.T) {
 		req := &Socks4Request{
-			Version: Socks4Version,
-			CMD:     ConnectCommand,
-			Addr:    "localhost:8080",
-			UserID:  "xyz",
+			CMD:    ConnectCommand,
+			Addr:   "localhost:8080",
+			UserID: "xyz",
 		}
 
 		b, err := req.MarshalBinary()
@@ -115,7 +111,6 @@ func TestSocks4Response(t *testing.T) {
 func TestMethodSelectRequest(t *testing.T) {
 	t.Run("single method", func(t *testing.T) {
 		req := &MethodSelectRequest{
-			Version: Socks5Version,
 			Methods: []AuthMethod{AuthMethodNotRequired},
 		}
 
@@ -131,7 +126,6 @@ func TestMethodSelectRequest(t *testing.T) {
 
 	t.Run("multi methods", func(t *testing.T) {
 		req := &MethodSelectRequest{
-			Version: Socks5Version,
 			Methods: []AuthMethod{AuthMethodNotRequired, AuthMethodUsernamePassword},
 		}
 
@@ -148,8 +142,7 @@ func TestMethodSelectRequest(t *testing.T) {
 
 func TestMethodSelectResponse(t *testing.T) {
 	resp := &MethodSelectResponse{
-		Version: Socks5Version,
-		Method:  AuthMethodNotRequired,
+		Method: AuthMethodNotRequired,
 	}
 
 	b, err := resp.MarshalBinary()
@@ -164,7 +157,6 @@ func TestMethodSelectResponse(t *testing.T) {
 
 func TestUsernamePasswordAuthRequest(t *testing.T) {
 	req := &UsernamePasswordAuthRequest{
-		Version:  UsernamePasswordAuthVersion1,
 		Username: "User",
 		Password: "Pass",
 	}
@@ -181,8 +173,7 @@ func TestUsernamePasswordAuthRequest(t *testing.T) {
 
 func TestUsernamePasswordAuthResponse(t *testing.T) {
 	resp := &UsernamePasswordAuthResponse{
-		Version: UsernamePasswordAuthVersion1,
-		Status:  AuthStatusSuccess,
+		Status: AuthStatusSuccess,
 	}
 
 	b, err := resp.MarshalBinary()
@@ -198,9 +189,8 @@ func TestUsernamePasswordAuthResponse(t *testing.T) {
 func TestSocks5Request(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		req := &Socks5Request{
-			Version: Socks5Version,
-			CMD:     ConnectCommand,
-			Addr:    "127.0.0.1:8080",
+			CMD:  ConnectCommand,
+			Addr: "127.0.0.1:8080",
 		}
 
 		b, err := req.MarshalBinary()
@@ -213,11 +203,10 @@ func TestSocks5Request(t *testing.T) {
 		assert.Equal(t, req, req2)
 	})
 
-	t.Run("IPv4", func(t *testing.T) {
+	t.Run("IPv6", func(t *testing.T) {
 		req := &Socks5Request{
-			Version: Socks5Version,
-			CMD:     ConnectCommand,
-			Addr:    "[::1]:8080",
+			CMD:  ConnectCommand,
+			Addr: "[::1]:8080",
 		}
 
 		b, err := req.MarshalBinary()
@@ -232,9 +221,8 @@ func TestSocks5Request(t *testing.T) {
 
 	t.Run("FQDN", func(t *testing.T) {
 		req := &Socks5Request{
-			Version: Socks5Version,
-			CMD:     ConnectCommand,
-			Addr:    "localhost:8080",
+			CMD:  ConnectCommand,
+			Addr: "localhost:8080",
 		}
 
 		b, err := req.MarshalBinary()
@@ -251,8 +239,7 @@ func TestSocks5Request(t *testing.T) {
 func TestSocks5Response(t *testing.T) {
 	t.Run("connect", func(t *testing.T) {
 		resp := &Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusFailure,
+			Status: Socks5StatusFailure,
 		}
 
 		b, err := resp.MarshalBinary()
@@ -267,9 +254,8 @@ func TestSocks5Response(t *testing.T) {
 
 	t.Run("bind", func(t *testing.T) {
 		resp := &Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusGranted,
-			Addr:    "127.0.0.1:5544",
+			Status: Socks5StatusGranted,
+			Addr:   "127.0.0.1:5544",
 		}
 
 		b, err := resp.MarshalBinary()

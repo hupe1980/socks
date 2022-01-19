@@ -102,7 +102,9 @@ func (h *socks4Handler) handleBind(req *Socks4Request) error {
 
 	_ = listener.Close()
 
-	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
+	// The SOCKS server checks the IP address of the originating host against
+	// the value of DSTIP specified in the client's BIND request.
+	if err := checkIPAddr(req.Addr, conn.RemoteAddr().String()); err != nil {
 		_ = conn.Close()
 
 		writeErr := h.conn.Write(&Socks4Response{
@@ -115,6 +117,8 @@ func (h *socks4Handler) handleBind(req *Socks4Request) error {
 		return err
 	}
 
+	// The SOCKS server sends a second reply packet to the client when the
+	// anticipated connection from the application server is established.
 	if err := h.conn.Write(&Socks4Response{
 		Status: Socks4StatusGranted,
 		Addr:   "",
@@ -142,8 +146,7 @@ func (h *socks5Handler) handle() error {
 	method := h.selectAuthMethod(methodSelectReq.Methods)
 
 	if err := h.conn.Write(&MethodSelectResponse{
-		Version: Socks5Version,
-		Method:  method,
+		Method: method,
 	}); err != nil {
 		return err
 	}
@@ -172,8 +175,7 @@ func (h *socks5Handler) handle() error {
 		fallthrough
 	default:
 		if err := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusCMDNotSupported,
+			Status: Socks5StatusCMDNotSupported,
 		}); err != nil {
 			return err
 		}
@@ -207,8 +209,7 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 		}
 
 		writeErr := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  status,
+			Status: status,
 		})
 		if writeErr != nil {
 			return writeErr
@@ -224,8 +225,7 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 	}()
 
 	if err := h.conn.Write(&Socks5Response{
-		Version: Socks5Version,
-		Status:  Socks5StatusGranted,
+		Status: Socks5StatusGranted,
 	}); err != nil {
 		return err
 	}
@@ -239,8 +239,7 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	listener, err := lc.Listen(context.Background(), "tcp", ":0")
 	if err != nil {
 		writeErr := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusFailure,
+			Status: Socks5StatusFailure,
 		})
 		if writeErr != nil {
 			return writeErr
@@ -250,9 +249,8 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	}
 
 	if err = h.conn.Write(&Socks5Response{
-		Version: Socks5Version,
-		Status:  Socks5StatusGranted,
-		Addr:    listener.Addr().String(),
+		Status: Socks5StatusGranted,
+		Addr:   listener.Addr().String(),
 	}); err != nil {
 		return err
 	}
@@ -260,8 +258,7 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	conn, err := listener.Accept()
 	if err != nil {
 		writeErr := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusFailure,
+			Status: Socks5StatusFailure,
 		})
 		if writeErr != nil {
 			return writeErr
@@ -272,12 +269,11 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 
 	_ = listener.Close()
 
-	if err := checkAllowedBind(req.Addr, conn.RemoteAddr().String()); err != nil {
+	if err := checkIPAddr(req.Addr, conn.RemoteAddr().String()); err != nil {
 		_ = conn.Close()
 
 		writeErr := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusFailure,
+			Status: Socks5StatusFailure,
 		})
 		if writeErr != nil {
 			return writeErr
@@ -287,9 +283,8 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 	}
 
 	if err := h.conn.Write(&Socks5Response{
-		Version: Socks5Version,
-		Status:  Socks5StatusGranted,
-		Addr:    conn.RemoteAddr().String(),
+		Status: Socks5StatusGranted,
+		Addr:   conn.RemoteAddr().String(),
 	}); err != nil {
 		return err
 	}
@@ -303,8 +298,7 @@ func (h *socks5Handler) handleAssociate(req *Socks5Request) error {
 	udpConn, err := lc.ListenPacket(context.Background(), "udp", req.Addr)
 	if err != nil {
 		writeErr := h.conn.Write(&Socks5Response{
-			Version: Socks5Version,
-			Status:  Socks5StatusFailure,
+			Status: Socks5StatusFailure,
 		})
 		if writeErr != nil {
 			return writeErr
@@ -322,7 +316,7 @@ func (h *socks5Handler) handleAssociate(req *Socks5Request) error {
 	return nil
 }
 
-func checkAllowedBind(expected, actual string) error {
+func checkIPAddr(expected, actual string) error {
 	expectedIP, _, err := net.SplitHostPort(expected)
 	if err != nil {
 		return err

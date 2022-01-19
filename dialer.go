@@ -11,6 +11,8 @@ import (
 )
 
 type Socks4DialerOptions struct {
+	UserID string
+
 	// Logger specifies an optional logger.
 	// If nil, logging is done via the log package's standard logger.
 	Logger golog.Logger
@@ -26,6 +28,7 @@ type Socks4Dialer struct {
 	proxyNetwork string // network between a proxy server and a client
 	proxyAddress string // proxy server address
 	proxyDialer  Dialer
+	userID       string
 }
 
 // NewSocks4Dialer returns a new Socks4Dialer that dials through the provided
@@ -46,6 +49,7 @@ func NewSocks4Dialer(network, address string, optFns ...func(*Socks4DialerOption
 		proxyNetwork: network,
 		proxyAddress: address,
 		proxyDialer:  options.ProxyDialer,
+		userID:       options.UserID,
 	}
 }
 
@@ -62,9 +66,9 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	socksConn := NewConn(conn)
 
 	if err := socksConn.Write(&Socks4Request{
-		Version: Socks4Version,
-		CMD:     ConnectCommand,
-		Addr:    addr,
+		CMD:    ConnectCommand,
+		Addr:   addr,
+		UserID: d.userID,
 	}); err != nil {
 		return nil, err
 	}
@@ -75,7 +79,7 @@ func (d *Socks4Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	if resp.Status != Socks4StatusGranted {
-		return nil, fmt.Errorf("reply error: %v", resp.Status)
+		return nil, fmt.Errorf("socks error: %v", resp.Status)
 	}
 
 	return conn, nil
@@ -148,7 +152,6 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 	socksConn := NewConn(conn)
 
 	if err := socksConn.Write(&MethodSelectRequest{
-		Version: Socks5Version,
 		Methods: d.authMethods,
 	}); err != nil {
 		return nil, err
@@ -170,9 +173,8 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	if err := socksConn.Write(&Socks5Request{
-		Version: Socks5Version,
-		CMD:     ConnectCommand,
-		Addr:    addr,
+		CMD:  ConnectCommand,
+		Addr: addr,
 	}); err != nil {
 		return nil, err
 	}
@@ -183,7 +185,7 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 	}
 
 	if resp.Status != Socks5StatusGranted {
-		return nil, fmt.Errorf("reply error: %v", resp.Status)
+		return nil, fmt.Errorf("socks error: %v", resp.Status)
 	}
 
 	return conn, nil
