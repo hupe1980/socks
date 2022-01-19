@@ -92,8 +92,9 @@ func (s *Server) Serve(l net.Listener) error {
 		}
 
 		go func() {
-			err := s.handleConnection(conn)
-			s.logErrorf("Connection error: %v", err)
+			if err := s.handleConnection(conn); err != nil {
+				s.logErrorf("Connection error: %v", err)
+			}
 		}()
 	}
 }
