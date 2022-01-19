@@ -159,7 +159,7 @@ func (h *socks5Handler) handle() error {
 	}
 
 	if method == AuthMethodNoAcceptableMethods {
-		return errors.New("no supported authentication mechanism")
+		return errors.New("no supported authentication method")
 	}
 
 	if h.authenticate != nil {
@@ -233,6 +233,10 @@ func (h *socks5Handler) handleConnect(req *Socks5Request) error {
 
 	if err := h.conn.Write(&Socks5Response{
 		Status: Socks5StatusGranted,
+		// In the reply to a CONNECT, BND.PORT contains the port number that the
+		// server assigned to connect to the target host, while BND.ADDR
+		// contains the associated IP address.
+		Addr: target.LocalAddr().String(),
 	}); err != nil {
 		return err
 	}
