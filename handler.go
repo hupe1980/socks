@@ -13,12 +13,19 @@ type socks4Handler struct {
 	conn     *Conn
 	dialer   Dialer
 	listener Listener
+	ident    IdentFunc
 }
 
 func (h *socks4Handler) handle() error {
 	req := &Socks4Request{}
 	if err := h.conn.Read(req); err != nil {
 		return err
+	}
+
+	if h.ident != nil {
+		if err := h.ident(context.Background(), h.conn, req); err != nil {
+			return err
+		}
 	}
 
 	switch req.CMD {

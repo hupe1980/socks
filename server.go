@@ -17,6 +17,10 @@ type Options struct {
 
 	Listener Listener
 
+	// Ident specifies the optional ident function.
+	// It must return an error when the ident is failed.
+	Ident IdentFunc
+
 	// AuthMethods specifies the list of supported authentication
 	// methods.
 	// If empty, SOCKS server supports AuthMethodNotRequired.
@@ -33,6 +37,7 @@ type Server struct {
 	addr         string
 	dialer       Dialer
 	listener     Listener
+	ident        IdentFunc
 	authMethods  []AuthMethod
 	authenticate AuthenticateFunc
 }
@@ -54,6 +59,7 @@ func New(addr string, optFns ...func(*Options)) *Server {
 		addr:         addr,
 		dialer:       options.Dialer,
 		listener:     options.Listener,
+		ident:        options.Ident,
 		authMethods:  options.AuthMethods,
 		authenticate: options.Authenticate,
 	}

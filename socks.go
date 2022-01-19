@@ -103,6 +103,8 @@ func (code Socks5Status) String() string {
 	}
 }
 
+type IdentFunc func(context.Context, *Conn, *Socks4Request) error
+
 type AddrType uint8
 
 const (
