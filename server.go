@@ -1,7 +1,7 @@
 package socks
 
 import (
-	"errors"
+	"fmt"
 	"log"
 	"net"
 
@@ -34,7 +34,6 @@ type Options struct {
 
 type Server struct {
 	*logger
-	addr         string
 	dialer       Dialer
 	listener     Listener
 	ident        IdentFunc
@@ -42,7 +41,7 @@ type Server struct {
 	authenticate AuthenticateFunc
 }
 
-func New(addr string, optFns ...func(*Options)) *Server {
+func New(optFns ...func(*Options)) *Server {
 	options := Options{
 		Logger:      golog.NewGoLogger(golog.INFO, log.Default()),
 		Dialer:      &net.Dialer{},
@@ -56,7 +55,6 @@ func New(addr string, optFns ...func(*Options)) *Server {
 
 	return &Server{
 		logger:       &logger{options.Logger},
-		addr:         addr,
 		dialer:       options.Dialer,
 		listener:     options.Listener,
 		ident:        options.Ident,
@@ -66,12 +64,12 @@ func New(addr string, optFns ...func(*Options)) *Server {
 }
 
 func ListenAndServe(addr string) error {
-	server := New(addr)
-	return server.ListenAndServe()
+	server := New()
+	return server.ListenAndServe(addr)
 }
 
-func (s *Server) ListenAndServe() error {
-	l, err := net.Listen("tcp", s.addr)
+func (s *Server) ListenAndServe(addr string) error {
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -132,6 +130,6 @@ func (s *Server) handleConnection(conn net.Conn) error {
 
 		return socks5Handler.handle()
 	default:
-		return errors.New("unsupported socks version")
+		return fmt.Errorf("unsupported socks version: %d", version[0])
 	}
 }

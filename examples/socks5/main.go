@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/hupe1980/socks"
@@ -49,9 +48,8 @@ func main() {
 
 	client := http.Client{
 		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				d := socks.NewSocks5Dialer("tcp", "localhost:1080")
-				return d.DialContext(ctx, network, addr)
+			Proxy: func(request *http.Request) (*url.URL, error) {
+				return url.Parse("socks5://localhost:1080")
 			},
 		},
 	}

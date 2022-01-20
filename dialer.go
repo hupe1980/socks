@@ -162,8 +162,11 @@ func (d *Socks5Dialer) DialContext(ctx context.Context, network, addr string) (n
 		return nil, err
 	}
 
+	// If the selected METHOD is X'FF', none of the methods listed by the
+	// client are acceptable, and the client MUST close the connection.
 	if methodSelectResp.Method == AuthMethodNoAcceptableMethods {
-		return nil, errors.New("no acceptable authentication methods")
+		_ = conn.Close()
+		return nil, errors.New("no authentication method accepted")
 	}
 
 	if d.authenticate != nil {

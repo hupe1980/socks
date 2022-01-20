@@ -95,7 +95,7 @@ func (code Socks5Status) String() string {
 	case Socks5StatusTTLExpired:
 		return "TTL expired"
 	case Socks5StatusCMDNotSupported:
-		return "Command not supported"
+		return "command not supported"
 	case Socks5StatusAddrTypeNotSupported:
 		return "address type not supported"
 	default:

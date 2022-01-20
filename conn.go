@@ -76,6 +76,16 @@ func (c *Conn) Tunnel(target net.Conn) error {
 	return nil
 }
 
+func (c Conn) WaitForClose() {
+	buf := make([]byte, 1)
+
+	for {
+		if _, err := c.reader.Read(buf[:]); err == io.EOF {
+			break
+		}
+	}
+}
+
 func proxy(dst io.Writer, src io.Reader, errCh chan error) {
 	_, err := io.Copy(dst, src)
 

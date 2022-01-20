@@ -304,7 +304,7 @@ func (h *socks5Handler) handleBind(req *Socks5Request) error {
 func (h *socks5Handler) handleAssociate(req *Socks5Request) error {
 	var lc net.ListenConfig
 
-	udpConn, err := lc.ListenPacket(context.Background(), "udp", req.Addr)
+	udpConn, err := lc.ListenPacket(context.Background(), "udp", ":0")
 	if err != nil {
 		writeErr := h.conn.Write(&Socks5Response{
 			Status: Socks5StatusFailure,
@@ -317,6 +317,21 @@ func (h *socks5Handler) handleAssociate(req *Socks5Request) error {
 	}
 
 	defer func() {
+		_ = udpConn.Close()
+	}()
+
+	if err = h.conn.Write(&Socks5Response{
+		Status: Socks5StatusGranted,
+		Addr:   udpConn.LocalAddr().String(),
+	}); err != nil {
+		return err
+	}
+
+	// A UDP association terminates when the TCP connection that the UDP
+	// ASSOCIATE request arrived on terminates.
+	go func() {
+		h.conn.WaitForClose()
+
 		_ = udpConn.Close()
 	}()
 
